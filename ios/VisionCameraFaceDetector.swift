@@ -14,10 +14,13 @@ public class VisionCameraFaceDetector: NSObject, FrameProcessorPluginBase {
         option.classificationMode = .all
         option.landmarkMode = .all
         option.performanceMode = .accurate // doesn't work in fast mode!, why?
+        option.isTrackingEnabled = true
         return option
     }()
     
     static var faceDetector = FaceDetector.faceDetector(options: FaceDetectorOption)
+
+    static var detectedFaceImgs: [Int: String] = [:]
     
     private static func processContours(from face: Face) -> [String:[[String:CGFloat]]] {
       let faceContoursTypes = [
@@ -120,6 +123,26 @@ public class VisionCameraFaceDetector: NSObject, FrameProcessorPluginBase {
                     map["smilingProbability"] = face.smilingProbability
                     map["bounds"] = processBoundingBox(from: face)
                     map["contours"] = processContours(from: face)
+
+                    if face.hasTrackingID {
+                        map["faceId"] = face.trackingID
+
+                        if let existingImg = detectedFaceImgs[face.trackingID] {
+                            map["img"] = existingImg
+                        } else {
+                            let imageBuffer = CMSampleBufferGetImageBuffer(frame.buffer)!
+                            let ciImage = CIImage(cvPixelBuffer: imageBuffer).cropped(to: face.frame)
+
+                            let context = CIContext(options: nil)
+                            let cgImage = context.createCGImage(ciImage, from: ciImage.extent)!
+
+                            let uiImage = UIImage(cgImage: cgImage)
+                            let newImg = uiImage.jpegData(compressionQuality: 95)?.base64EncodedString()
+
+                            detectedFaceImgs[face.trackingID] = newImg
+                            map["img"] = newImg
+                        }
+                    }
                     
                     faceAttributes.append(map)
                 }
